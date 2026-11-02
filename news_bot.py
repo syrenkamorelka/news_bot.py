@@ -3,7 +3,7 @@ import os
 import requests
 import yfinance as yf
 
-# Nowy dedykowany webhook do bota z wiadomościami
+# Twój dedykowany webhook do bota z wiadomościami
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1566882526964744242/9MbXouFSYz8PlymBh9sPyKoNlwweTwJ68F7b_uTa6WZlDqIU2slahEoMeyjBxeKhARvj"
 
 # Skanujemy najważniejsze spółki z giełdy pod kątem wiadomości
@@ -126,23 +126,26 @@ def send_discord_report(insights):
         "inline": False,
     })
 
+  # TUTAJ DODANO @everyone oraz wiadomość o nowych wiadomościach:
   payload = {
       "content": (
-          "🧠 **Inteligentny Analityk Newsów SIGG – Przegląd komunikatów!**"
+          "@everyone 🚨 **Nowe wiadomości i inteligentna analiza rynková ze"
+          " spółek!**"
       ),
       "embeds": [{
           "title": "🔍 Automatyczna Analiza Wydarzeń Giełdowych",
           "description": (
-              "Bot przeanalizował nagłówki z rynku i wyciągnął wnioski:"
+              "Bot przeskanował podane firmy i przeanalizował ich najnowsze"
+              " komunikaty:"
           ),
-          "color": 3447003,  # Niebieski / Analityczny kolor
+          "color": 3447003,
           "fields": fields,
           "footer": {"text": "SIGG AI News Analyzer | GitHub Actions"},
       }],
   }
 
   requests.post(DISCORD_WEBHOOK_URL, json=payload)
-  print("Wysłano raport z analizą newsów na Discorda!")
+  print("Wysłano raport z wiadomościami na Discorda!")
 
 
 if __name__ == "__main__":
