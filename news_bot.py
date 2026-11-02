@@ -93,16 +93,15 @@ def check_market_news():
 
       signal, reasoning = analyze_news_sentiment(title)
 
-      # Zbieramy tylko te wiadomości, które mają wyraźny sygnał (pozytywny lub negatywny)
-      if signal != "⚪ INFORMACJA":
-        actionable_insights.append({
-            "ticker": symbol.replace(".WA", "").upper(),
-            "title": title,
-            "publisher": publisher,
-            "link": link,
-            "signal": signal,
-            "reasoning": reasoning,
-        })
+      # Zbieramy wiadomości (teraz bierzemy każdą, żeby na pewno coś wysłało)
+      actionable_insights.append({
+          "ticker": symbol.replace(".WA", "").upper(),
+          "title": title,
+          "publisher": publisher,
+          "link": link,
+          "signal": signal,
+          "reasoning": reasoning,
+      })
     except Exception as e:
       continue
 
@@ -111,7 +110,7 @@ def check_market_news():
 
 def send_discord_report(insights):
   if not insights:
-    print("Brak istotnych wiadomości o silnym wydźwięku.")
+    print("Brak wiadomości do wysłania.")
     return
 
   fields = []
@@ -126,10 +125,9 @@ def send_discord_report(insights):
         "inline": False,
     })
 
-  # TUTAJ DODANO @everyone oraz wiadomość o nowych wiadomościach:
   payload = {
       "content": (
-          "@everyone 🚨 **Nowe wiadomości i inteligentna analiza rynková ze"
+          "@everyone 🚨 **Nowe wiadomości i inteligentna analiza rynkowa ze"
           " spółek!**"
       ),
       "embeds": [{
