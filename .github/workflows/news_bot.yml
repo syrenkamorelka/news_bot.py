@@ -1,0 +1,26 @@
+name: Run SIGG News Bot
+
+on:
+  workflow_dispatch: # Pozwala włączyć bota ręcznie przyciskiem w zakładce Actions
+  schedule:
+    - cron: '0 8 * * 1-5' # Uruchamia się od poniedziałku do piątku o 8:00 rano (czasu UTC)
+
+jobs:
+  run-news-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas yfinance requests
+
+      - name: Run news analysis bot
+        run: |
+          python news_bot.py
