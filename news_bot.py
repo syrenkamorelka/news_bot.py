@@ -6,24 +6,9 @@ import yfinance as yf
 # Twój dedykowany webhook do bota z wiadomościami
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1566882526964744242/9MbXouFSYz8PlymBh9sPyKoNlwweTwJ68F7b_uTa6WZlDqIU2slahEoMeyjBxeKhARvj"
 
-# Skanujemy najważniejsze spółki z giełdy pod kątem wiadomości
-TICKERS = [
-    "PKO.WA",
-    "PKN.WA",
-    "PZU.WA",
-    "KGH.WA",
-    "PEO.WA",
-    "ALE.WA",
-    "CDR.WA",
-    "LPP.WA",
-    "DNP.WA",
-    "ALR.WA",
-    "PGE.WA",
-    "JSW.WA",
-    "XTB.WA",
-]
+# Skracamy na próbę listę do najpopularniejszych spółek, żeby poszło błyskawicznie
+TICKERS = ["PKO.WA", "PKN.WA", "PZU.WA", "KGH.WA", "PGE.WA", "JSW.WA"]
 
-# Słowa kluczowe do analizy wydźwięku wiadomości (sentymentu)
 POSITIVE_KEYWORDS = [
     "zysk",
     "wzrost",
@@ -52,7 +37,6 @@ NEGATIVE_KEYWORDS = [
 
 def analyze_news_sentiment(title):
   title_lower = title.lower()
-
   pos_score = sum(1 for word in POSITIVE_KEYWORDS if word in title_lower)
   neg_score = sum(1 for word in NEGATIVE_KEYWORDS if word in title_lower)
 
@@ -67,20 +51,21 @@ def analyze_news_sentiment(title):
         "Wiadomość wskazuje na potencjalne problemy.",
     )
   else:
-    return (
-        "⚪ INFORMACJA",
-        "Neutralny komunikat rynkowy.",
-    )
+    return ("⚪ INFORMACJA", "Neutralny komunikat rynkowy.")
 
 
 def check_market_news():
   actionable_insights = []
 
   for symbol in TICKERS:
+    print(f"Sprawdzam wiadomości dla: {symbol}...")
     try:
+      # Pobieramy dane z zabezpieczeniem przed zawieszeniem
       ticker = yf.Ticker(symbol)
       news_list = ticker.news
+
       if not news_list:
+        print(f"Brak wiadomości dla {symbol}")
         continue
 
       latest_news = news_list[0]
@@ -93,7 +78,6 @@ def check_market_news():
 
       signal, reasoning = analyze_news_sentiment(title)
 
-      # Zbieramy wiadomości (teraz bierzemy każdą, żeby na pewno coś wysłało)
       actionable_insights.append({
           "ticker": symbol.replace(".WA", "").upper(),
           "title": title,
@@ -102,7 +86,13 @@ def check_market_news():
           "signal": signal,
           "reasoning": reasoning,
       })
+      print(
+          f"Udało się pobrać news dla {symbol}:"
+          f" {title[:30]}..."
+      )
+
     except Exception as e:
+      print(f"Błąd przy spółce {symbol}: {e}")
       continue
 
   return actionable_insights
@@ -110,11 +100,19 @@ def check_market_news():
 
 def send_discord_report(insights):
   if not insights:
-    print("Brak wiadomości do wysłania.")
+    print("Brak wiadomości do wysłania na Discorda.")
+    # Wyślij chociaż informację, że bot działa, żebyś widział, że skrypt dotarł do końca
+    payload_empty = {
+        "content": (
+            "@everyone 🤖 Bot wiadomości uruchomił się, ale Yahoo Finance nie"
+            " zwróciło w tej chwili żadnych nowych artykułów dla tych"
+            " spółek."
+        )
+    }
+    requests.post(DISCORD_WEBHOOK_URL, json=payload_empty)
     return
 
   fields = []
-
   for item in insights[:5]:
     fields.append({
         "name": f"{item['signal']} | {item['ticker']} ({item['publisher']})",
@@ -142,11 +140,13 @@ def send_discord_report(insights):
       }],
   }
 
-  requests.post(DISCORD_WEBHOOK_URL, json=payload)
-  print("Wysłano raport z wiadomościami na Discorda!")
+  response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+  print(
+      f"Wysłano raport na Discorda! Odpowiedź serwera: {response.status_code}"
+  )
 
 
 if __name__ == "__main__":
-  print("Rozpoczynam analizę sentymentu wiadomości rynkowych...")
+  print("Rozpoczynam bezpieczne pobieranie wiadomości...")
   insights = check_market_news()
   send_discord_report(insights)
