@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas yfinance requests
+          pip install pandas yfinance requests feedparser
 
       - name: Run news analysis bot
         run: |
