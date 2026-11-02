@@ -1,14 +1,15 @@
-import json
 import os
+import re
 import requests
-import yfinance as yf
+import feedparser
 
-# Twój dedykowany webhook do bota z wiadomościami
+# Dedykowany webhook do bota z wiadomościami
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1566882526964744242/9MbXouFSYz8PlymBh9sPyKoNlwweTwJ68F7b_uTa6WZlDqIU2slahEoMeyjBxeKhARvj"
 
-# Skracamy na próbę listę do najpopularniejszych spółek, żeby poszło błyskawicznie
-TICKERS = ["PKO.WA", "PKN.WA", "PZU.WA", "KGH.WA", "PGE.WA", "JSW.WA"]
+# Polskie źródło wiadomości finansowych (Strumień RSS)
+RSS_FEED_URL = "https://strefainwestorow.pl/rss.xml"
 
+# Słowa kluczowe do analizy sentymentu
 POSITIVE_KEYWORDS = [
     "zysk",
     "wzrost",
@@ -20,6 +21,8 @@ POSITIVE_KEYWORDS = [
     "przychód",
     "wygrana",
     "inwestycja",
+    "zwiększa",
+    "umowa",
 ]
 NEGATIVE_KEYWORDS = [
     "strata",
@@ -32,111 +35,98 @@ NEGATIVE_KEYWORDS = [
     "śledztwo",
     "ryzyko",
     "zamknięcie",
+    "spada",
+    "obniżka",
 ]
 
 
-def analyze_news_sentiment(title):
-  title_lower = title.lower()
-  pos_score = sum(1 for word in POSITIVE_KEYWORDS if word in title_lower)
-  neg_score = sum(1 for word in NEGATIVE_KEYWORDS if word in title_lower)
+def clean_html(raw_html):
+  cleanr = re.compile("<.*?>")
+  return re.sub(cleanr, "", raw_html)
+
+
+def analyze_news_sentiment(title, summary=""):
+  text = f"{title} {summary}".lower()
+
+  pos_score = sum(1 for word in POSITIVE_KEYWORDS if word in text)
+  neg_score = sum(1 for word in NEGATIVE_KEYWORDS if word in text)
 
   if pos_score > neg_score:
     return (
         "🟢 SUGESTIA: KUPUJ / TRZYMAJ",
-        "Wiadomość ma pozytywny wydźwięk dla spółki.",
+        "Wiadomość zawiera pozytywne informacje rynkowe.",
     )
   elif neg_score > pos_score:
     return (
         "🔴 SUGESTIA: OSTRZEŻENIE / SPRZEDAJ",
-        "Wiadomość wskazuje na potencjalne problemy.",
+        "Wiadomość wskazuje na ryzyko lub spadki.",
     )
   else:
-    return ("⚪ INFORMACJA", "Neutralny komunikat rynkowy.")
+    return (
+        "⚪ INFORMACJA",
+        "Neutralny komunikat / bieżące wydarzenia z giełdy.",
+    )
 
 
-def check_market_news():
+def fetch_polish_market_news():
+  print("Pobieram najświeższe polskie wiadomości giełdowe...")
+  feed = feedparser.parse(RSS_FEED_URL)
   actionable_insights = []
 
-  for symbol in TICKERS:
-    print(f"Sprawdzam wiadomości dla: {symbol}...")
-    try:
-      # Pobieramy dane z zabezpieczeniem przed zawieszeniem
-      ticker = yf.Ticker(symbol)
-      news_list = ticker.news
+  if not feed.entries:
+    print("Nie udało się pobrać wiadomości z kanału RSS.")
+    return []
 
-      if not news_list:
-        print(f"Brak wiadomości dla {symbol}")
-        continue
+  # Analizujemy 5 najnowszych artykułów z rynku
+  for entry in feed.entries[:5]:
+    title = entry.get("title", "Brak tytułu")
+    link = entry.get("link", "#")
+    summary_raw = entry.get("summary", "")
+    summary = clean_html(summary_raw)[:150] + "..." if summary_raw else ""
 
-      latest_news = news_list[0]
-      title = latest_news.get("title", "")
-      publisher = latest_news.get("publisher", "GPW")
-      link = latest_news.get("link", "#")
+    signal, reasoning = analyze_news_sentiment(title, summary)
 
-      if not title:
-        continue
-
-      signal, reasoning = analyze_news_sentiment(title)
-
-      actionable_insights.append({
-          "ticker": symbol.replace(".WA", "").upper(),
-          "title": title,
-          "publisher": publisher,
-          "link": link,
-          "signal": signal,
-          "reasoning": reasoning,
-      })
-      print(
-          f"Udało się pobrać news dla {symbol}:"
-          f" {title[:30]}..."
-      )
-
-    except Exception as e:
-      print(f"Błąd przy spółce {symbol}: {e}")
-      continue
+    actionable_insights.append({
+        "title": title,
+        "link": link,
+        "summary": summary,
+        "signal": signal,
+        "reasoning": reasoning,
+    })
 
   return actionable_insights
 
 
 def send_discord_report(insights):
   if not insights:
-    print("Brak wiadomości do wysłania na Discorda.")
-    # Wyślij chociaż informację, że bot działa, żebyś widział, że skrypt dotarł do końca
-    payload_empty = {
-        "content": (
-            "@everyone 🤖 Bot wiadomości uruchomił się, ale Yahoo Finance nie"
-            " zwróciło w tej chwili żadnych nowych artykułów dla tych"
-            " spółek."
-        )
-    }
-    requests.post(DISCORD_WEBHOOK_URL, json=payload_empty)
+    print("Brak artykułów do wysłania.")
     return
 
   fields = []
-  for item in insights[:5]:
+
+  for item in insights:
     fields.append({
-        "name": f"{item['signal']} | {item['ticker']} ({item['publisher']})",
+        "name": f"{item['signal']}",
         "value": (
-            f"**Tytuł:** [{item['title']}]({item['link']})\n**Wniosek:**"
-            f" {item['reasoning']}"
+            f"📰 **[{item['title']}]({item['link']})**\n_{item['summary']}_\n💡"
+            f" **Wniosek:** {item['reasoning']}"
         ),
         "inline": False,
     })
 
   payload = {
       "content": (
-          "@everyone 🚨 **Nowe wiadomości i inteligentna analiza rynkowa ze"
-          " spółek!**"
+          "@everyone 🚨 **Nowy Przegląd Polskiego Rynku i Wiadomości GPW!**"
       ),
       "embeds": [{
-          "title": "🔍 Automatyczna Analiza Wydarzeń Giełdowych",
+          "title": "🔍 Świeże Wiadomości Giełdowe z Polskich Portali",
           "description": (
-              "Bot przeskanował podane firmy i przeanalizował ich najnowsze"
-              " komunikaty:"
+              "Bot przeskanował najnowsze publikacje finansowe i przeanalizował"
+              " ich wydźwięk:"
           ),
           "color": 3447003,
           "fields": fields,
-          "footer": {"text": "SIGG AI News Analyzer | GitHub Actions"},
+          "footer": {"text": "SIGG Polish News Analyzer | GitHub Actions"},
       }],
   }
 
@@ -147,6 +137,5 @@ def send_discord_report(insights):
 
 
 if __name__ == "__main__":
-  print("Rozpoczynam bezpieczne pobieranie wiadomości...")
-  insights = check_market_news()
+  insights = fetch_polish_market_news()
   send_discord_report(insights)
