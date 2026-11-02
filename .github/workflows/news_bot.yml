@@ -1,9 +1,9 @@
 name: Run SIGG News Bot
 
 on:
-  workflow_dispatch: # Pozwala włączyć bota ręcznie przyciskiem w zakładce Actions
+  workflow_dispatch:
   schedule:
-    - cron: '0 8 * * 1-5' # Uruchamia się od poniedziałku do piątku o 8:00 rano (czasu UTC)
+    - cron: '0 6 * * 1-5' # Uruchamia się od poniedziałku do piątku o :00 rano (czasu UTC)
 
 jobs:
   run-news-bot:
